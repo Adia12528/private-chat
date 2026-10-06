@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPeerConnection, getLocalStream, stopStream, closePeerConnection } from "../services/webrtc.js";
+import { createPeerConnection, getLocalStream, stopStream, closePeerConnection, fetchIceServers } from "../services/webrtc.js";
 
 export function useCall(socket) {
   const [incomingCall, setIncomingCall] = useState(null); // { from, fromName, mode, offer }
@@ -15,6 +15,10 @@ export function useCall(socket) {
   const partnerRef = useRef(null);
   const timerRef = useRef(null);
   const localStreamRef = useRef(null);
+
+  useEffect(() => {
+    fetchIceServers().catch(() => {});
+  }, []);
 
   const cleanup = useCallback(() => {
     closePeerConnection(pcRef.current);
@@ -42,7 +46,7 @@ export function useCall(socket) {
   }, []);
 
   const setupPeer = useCallback(
-    (toId) => {
+    (toId, iceServers = null) => {
       const pc = createPeerConnection({
         onIceCandidate: (candidate) => socket.emit("call:ice", { to: toId, candidate }),
         onTrack: (stream) => setRemoteStream(stream),
@@ -50,25 +54,31 @@ export function useCall(socket) {
           if (state === "connected") {
             setCallState((s) => (s ? { ...s, status: "connected" } : s));
             startTimer();
+          } else if (state === "failed") {
+            setError("Call connection failed. A TURN relay server may be needed for your network.");
+            cleanup();
           }
         },
-      });
+      }, iceServers);
       pcRef.current = pc;
       return pc;
     },
-    [socket, startTimer]
+    [socket, startTimer, cleanup]
   );
 
   const startCall = useCallback(
     async (toId, toName, mode) => {
       setError("");
       try {
-        const stream = await getLocalStream(mode);
+        const [stream, iceServers] = await Promise.all([
+          getLocalStream(mode),
+          fetchIceServers().catch(() => null),
+        ]);
         localStreamRef.current = stream;
         setLocalStream(stream);
         partnerRef.current = toId;
         setCallState({ partnerId: toId, partnerName: toName, mode, direction: "outgoing", status: "calling" });
-        const pc = setupPeer(toId);
+        const pc = setupPeer(toId, iceServers);
         stream.getTracks().forEach((t) => pc.addTrack(t, stream));
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
@@ -86,13 +96,16 @@ export function useCall(socket) {
     const { from, fromName, mode, offer } = incomingCall;
     setError("");
     try {
-      const stream = await getLocalStream(mode);
+      const [stream, iceServers] = await Promise.all([
+        getLocalStream(mode),
+        fetchIceServers().catch(() => null),
+      ]);
       localStreamRef.current = stream;
       setLocalStream(stream);
       partnerRef.current = from;
       setCallState({ partnerId: from, partnerName: fromName, mode, direction: "incoming", status: "connecting" });
       setIncomingCall(null);
-      const pc = setupPeer(from);
+      const pc = setupPeer(from, iceServers);
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
       await pc.setRemoteDescription(offer);
       const answer = await pc.createAnswer();
