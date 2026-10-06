@@ -1,0 +1,35 @@
+import express from "express";
+import http from "http";
+import cors from "cors";
+import { Server } from "socket.io";
+import dotenv from "dotenv";
+import { registerSocketHandlers } from "./socket/index.js";
+
+dotenv.config();
+
+const app = express();
+const server = http.createServer(app);
+
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+const allowedOrigins = CLIENT_URL.split(",").map((o) => o.trim()).filter(Boolean);
+
+app.use(cors({ origin: allowedOrigins }));
+
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+  },
+});
+
+app.get("/health", (req, res) => res.json({ ok: true }));
+
+io.on("connection", (socket) => {
+  registerSocketHandlers(io, socket);
+});
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`Realtime server listening on port ${PORT}`);
+  console.log(`Allowed client origins: ${allowedOrigins.join(", ")}`);
+});
