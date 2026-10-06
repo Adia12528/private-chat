@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "../services/socket.js";
 import { usePresence } from "../hooks/usePresence.js";
 import { useChatMessages } from "../hooks/useChatMessages.js";
@@ -17,8 +17,17 @@ import CallOverlay from "../components/Calls/CallOverlay.jsx";
 
 export default function ChatRoom({ session, theme, setTheme, onLeave }) {
   const { onlineUsers, status } = usePresence(socket);
-  const { messages, typingUsers, sendMessage, editMessage, deleteMessage, setTyping, clearChat, exportChat, searchChat } =
-    useChatMessages(socket, session.roomId, session.participantId, session.displayName);
+  const {
+    messages,
+    typingUsers,
+    sendMessage,
+    editMessage,
+    deleteMessage,
+    setTyping,
+    clearChat,
+    exportChat,
+    searchChat,
+  } = useChatMessages(socket, session.roomId, session.participantId, session.displayName);
   const call = useCall(socket);
   const { toasts, push } = useToasts();
 
@@ -26,6 +35,9 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [unread, setUnread] = useState(0);
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const headerMenuRef = useRef(null);
 
   useEffect(() => {
     if (call.error) push(call.error);
@@ -50,22 +62,64 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
     document.title = unread > 0 ? `(${unread}) PrivateChat` : "PrivateChat";
   }, [unread]);
 
+  // Click outside to close header more menu
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target)) {
+        setHeaderMenuOpen(false);
+      }
+    }
+    if (headerMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [headerMenuOpen]);
+
   const highlightIds = useMemo(() => new Set(searchResults.map((m) => m.id)), [searchResults]);
+  const otherUsers = useMemo(
+    () => onlineUsers.filter((u) => u.participantId !== session.participantId),
+    [onlineUsers, session.participantId]
+  );
 
   function handleCall(user, mode) {
+    if (sidebarMobileOpen) setSidebarMobileOpen(false);
     call.startCall(user.participantId, user.displayName, mode);
   }
 
+  function handleHeaderCall(mode) {
+    if (otherUsers.length === 0) {
+      push("No one else is in this room yet. Share the room invite!");
+      return;
+    }
+    if (otherUsers.length === 1) {
+      handleCall(otherUsers[0], mode);
+    } else {
+      setSidebarMobileOpen(true);
+      push("Select a user from the list to call.");
+    }
+  }
+
+  function handleShareInvite() {
+    const text = `Join my room on PrivateChat:\nRoom ID: ${session.accountId}\nPassword: ${session.password}\nLink: ${window.location.origin}`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => push("Room invite copied to clipboard!"))
+        .catch(() => push(`Room: ${session.accountId} | Password: ${session.password}`));
+    } else {
+      push(`Room: ${session.accountId} | Password: ${session.password}`);
+    }
+    setHeaderMenuOpen(false);
+  }
+
   function handleOpenChat() {
-    // This app uses one shared group chat per room (not separate 1-to-1 DM
-    // threads), so "open chat" jumps to and focuses the message box —
-    // handy on mobile where the sidebar and chat aren't both on screen.
+    setSidebarMobileOpen(false);
     const el = document.querySelector(".message-form textarea");
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
     el?.focus();
   }
 
   function handleExport(format) {
+    setHeaderMenuOpen(false);
     const data = exportChat(format);
     const blob = new Blob([data], { type: format === "json" ? "application/json" : "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -74,10 +128,12 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
     a.download = `${session.accountId}-chat.${format}`;
     a.click();
     URL.revokeObjectURL(url);
+    push(`Chat exported as .${format}`);
   }
 
   function handleClear() {
-    if (confirm("Clear your local chat history for this room? This only affects this browser.")) {
+    setHeaderMenuOpen(false);
+    if (confirm("Clear local chat history for this room? This only affects this browser.")) {
       clearChat();
       push("Local chat history cleared.");
     }
@@ -96,48 +152,118 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <div className="me">
-            <span className="dot online" />
-            <span>{session.displayName}</span>
+      {/* Mobile Backdrop for sidebar drawer */}
+      {sidebarMobileOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setSidebarMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar (People, Room details, actions) */}
+      <aside className={"sidebar " + (sidebarMobileOpen ? "mobile-open" : "")}>
+        <div className="sidebar-top">
+          <div className="sidebar-header">
+            <div className="me-badge">
+              <div className="me-avatar">
+                {session.displayName?.[0]?.toUpperCase() || "U"}
+                <span className="dot online-badge" />
+              </div>
+              <div className="me-details">
+                <span className="me-name">{session.displayName}</span>
+                <span className="me-role">You</span>
+              </div>
+            </div>
+
+            <div className="sidebar-actions">
+              <ConnectionStatus status={status} />
+              <ThemeToggle theme={theme} setTheme={setTheme} />
+              <button
+                className="icon-btn leave-btn"
+                title="Leave room"
+                aria-label="Leave room"
+                onClick={handleLeave}
+              >
+                ⏻
+              </button>
+            </div>
           </div>
-          <div className="sidebar-actions">
-            <ConnectionStatus status={status} />
-            <ThemeToggle theme={theme} setTheme={setTheme} />
-            <button className="icon-btn" title="Leave room" aria-label="Leave room" onClick={handleLeave}>
-              ⏻
+
+          <div className="room-card">
+            <div className="room-card-info">
+              <span className="room-label">ROOM</span>
+              <span className="room-code">{session.accountId}</span>
+            </div>
+            <button
+              className="room-share-btn"
+              onClick={handleShareInvite}
+              title="Copy room invite"
+              aria-label="Copy room invite"
+            >
+              📋 Share
             </button>
           </div>
         </div>
-        <p className="room-tag">Room: {session.accountId}</p>
+
         <UserList
           users={onlineUsers}
           myParticipantId={session.participantId}
           onCall={handleCall}
           onOpenChat={handleOpenChat}
           activePartnerId={activePartnerId}
+          onShareRoom={handleShareInvite}
         />
+
         <div className="sidebar-footer">
-          <button className="link-btn" onClick={() => setSearchOpen((o) => !o)}>
-            🔍 Search
+          <button
+            className="sidebar-link-btn"
+            onClick={() => {
+              setSearchOpen((o) => !o);
+              if (sidebarMobileOpen) setSidebarMobileOpen(false);
+            }}
+          >
+            🔍 Search messages
           </button>
-          <button className="link-btn" onClick={() => handleExport("txt")}>
-            ⬇ Export .txt
-          </button>
-          <button className="link-btn" onClick={() => handleExport("json")}>
-            ⬇ Export .json
-          </button>
-          <button className="link-btn danger" onClick={handleClear}>
-            🗑 Clear local chat
+          <div className="sidebar-export-row">
+            <button className="sidebar-link-btn" onClick={() => handleExport("txt")}>
+              ⬇ .txt
+            </button>
+            <button className="sidebar-link-btn" onClick={() => handleExport("json")}>
+              ⬇ .json
+            </button>
+          </div>
+          <button className="sidebar-link-btn danger" onClick={handleClear}>
+            🗑 Clear chat history
           </button>
         </div>
       </aside>
 
+      {/* Main Chat Panel */}
       <main className="chat-panel">
         <header className="chat-header">
-          <div className="chat-header-title">Group chat</div>
-          {searchOpen && (
+          <div className="chat-header-left">
+            <button
+              className="mobile-menu-btn"
+              onClick={() => setSidebarMobileOpen((o) => !o)}
+              aria-label="Toggle user list"
+              title="Room members"
+            >
+              <span className="menu-icon">☰</span>
+              <span className="mobile-badge-count">{onlineUsers.length}</span>
+            </button>
+
+            <div className="chat-title-group">
+              <h1 className="chat-header-title">Room: {session.accountId}</h1>
+              <span className="chat-header-sub">
+                {otherUsers.length === 0
+                  ? "Only you in room"
+                  : `${otherUsers.length} other${otherUsers.length > 1 ? "s" : ""} online`}
+              </span>
+            </div>
+          </div>
+
+          {searchOpen ? (
             <SearchBar
               onSearch={handleSearch}
               onClose={() => {
@@ -145,6 +271,75 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
                 setSearchResults([]);
               }}
             />
+          ) : (
+            <div className="chat-header-right">
+              {/* Quick direct call buttons in header */}
+              <button
+                className="header-action-btn voice"
+                onClick={() => handleHeaderCall("audio")}
+                title={
+                  otherUsers.length === 1
+                    ? `Voice call ${otherUsers[0].displayName}`
+                    : "Start Voice Call"
+                }
+                aria-label="Voice call"
+              >
+                📞
+              </button>
+              <button
+                className="header-action-btn video"
+                onClick={() => handleHeaderCall("video")}
+                title={
+                  otherUsers.length === 1
+                    ? `Video call ${otherUsers[0].displayName}`
+                    : "Start Video Call"
+                }
+                aria-label="Video call"
+              >
+                🎥
+              </button>
+
+              <button
+                className="header-action-btn search"
+                onClick={() => setSearchOpen(true)}
+                title="Search messages"
+                aria-label="Search"
+              >
+                🔍
+              </button>
+
+              {/* Header more options menu */}
+              <div className="header-menu-wrap" ref={headerMenuRef}>
+                <button
+                  className="header-action-btn more"
+                  onClick={() => setHeaderMenuOpen((o) => !o)}
+                  title="More room options"
+                  aria-label="More options"
+                >
+                  ⋮
+                </button>
+                {headerMenuOpen && (
+                  <div className="header-dropdown-menu">
+                    <button onClick={handleShareInvite}>
+                      <span>📋</span> Copy Room Invite
+                    </button>
+                    <button onClick={() => handleExport("txt")}>
+                      <span>📄</span> Export Chat (.txt)
+                    </button>
+                    <button onClick={() => handleExport("json")}>
+                      <span>💾</span> Export Chat (.json)
+                    </button>
+                    <button className="danger-text" onClick={handleClear}>
+                      <span>🗑</span> Clear Local Chat
+                    </button>
+                    <hr />
+                    <button className="danger-text" onClick={handleLeave}>
+                      <span>⏻</span> Leave Room
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </header>
 
@@ -156,11 +351,23 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
           onDelete={deleteMessage}
           highlightIds={highlightIds}
         />
+
         <TypingIndicator typingUsers={typingUsers} />
-        <MessageInput onSend={sendMessage} onTyping={setTyping} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
+
+        <MessageInput
+          onSend={sendMessage}
+          onTyping={setTyping}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+        />
       </main>
 
-      <IncomingCallModal call={call.incomingCall} onAccept={call.acceptCall} onReject={call.rejectCall} />
+      <IncomingCallModal
+        call={call.incomingCall}
+        onAccept={call.acceptCall}
+        onReject={call.rejectCall}
+      />
+
       <CallOverlay
         callState={call.callState}
         localStream={call.localStream}
@@ -168,10 +375,13 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
         duration={call.duration}
         muted={call.muted}
         cameraOff={call.cameraOff}
+        facingMode={call.facingMode}
         onMute={call.toggleMute}
         onCamera={call.toggleCamera}
+        onSwitchCamera={call.switchCamera}
         onEnd={call.callState?.status === "calling" ? call.cancelOutgoing : call.endCall}
       />
+
       <Toast messages={toasts} />
     </div>
   );

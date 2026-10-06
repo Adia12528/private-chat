@@ -1,53 +1,102 @@
-export default function UserList({ users, myParticipantId, onCall, onOpenChat, activePartnerId }) {
+export default function UserList({
+  users,
+  myParticipantId,
+  onCall,
+  onOpenChat,
+  activePartnerId,
+  onShareRoom,
+}) {
   const others = users.filter((u) => u.participantId !== myParticipantId);
   const nameById = new Map(users.map((u) => [u.participantId, u.displayName]));
 
   return (
     <div className="user-list">
-      <div className="sidebar-title">Online ({others.length})</div>
-      {others.length === 0 && (
-        <p className="subtle small">No one else is here yet. Share your ID &amp; password with others to invite them.</p>
+      <div className="user-list-header">
+        <span className="sidebar-section-title">In this room</span>
+        <span className="user-count-badge">{others.length + 1}</span>
+      </div>
+
+      {others.length === 0 ? (
+        <div className="empty-room-prompt">
+          <div className="empty-room-icon">👋</div>
+          <p className="empty-room-title">You are the only one here</p>
+          <p className="subtle small">
+            Share your room ID &amp; password with friends so they can join and call you.
+          </p>
+          {onShareRoom && (
+            <button className="copy-invite-btn" onClick={onShareRoom}>
+              📋 Copy Room Invite
+            </button>
+          )}
+        </div>
+      ) : (
+        <ul className="contact-items-list">
+          {others.map((u) => {
+            const busy = !!u.busyWith;
+            const busyWithName = busy ? nameById.get(u.busyWith) : null;
+            const isTarget = u.participantId === activePartnerId;
+
+            return (
+              <li
+                key={u.participantId}
+                className={"contact-item" + (isTarget ? " active-call-peer" : "")}
+              >
+                <div className="contact-avatar-wrap">
+                  <div className="contact-avatar">
+                    {u.displayName?.[0]?.toUpperCase() || "?"}
+                  </div>
+                  <span
+                    className={"contact-status-dot " + (busy ? "busy" : "online")}
+                    title={busy ? "Busy on a call" : "Available"}
+                  />
+                </div>
+
+                <div className="contact-info">
+                  <span className="contact-name">{u.displayName}</span>
+                  <span className={"contact-status-text " + (busy ? "busy" : "online")}>
+                    {busy
+                      ? busyWithName
+                        ? `On call with ${busyWithName}`
+                        : "On a call"
+                      : "Available"}
+                  </span>
+                </div>
+
+                <div className="contact-actions">
+                  <button
+                    className="action-pill-btn voice"
+                    title={busy ? "User is busy" : `Voice call ${u.displayName}`}
+                    aria-label={`Voice call ${u.displayName}`}
+                    disabled={busy}
+                    onClick={() => onCall(u, "audio")}
+                  >
+                    📞
+                  </button>
+                  <button
+                    className="action-pill-btn video"
+                    title={busy ? "User is busy" : `Video call ${u.displayName}`}
+                    aria-label={`Video call ${u.displayName}`}
+                    disabled={busy}
+                    onClick={() => onCall(u, "video")}
+                  >
+                    🎥
+                  </button>
+                  {onOpenChat && (
+                    <button
+                      className="action-pill-btn chat mobile-only"
+                      title="Jump to chat"
+                      aria-label="Jump to chat"
+                      onClick={() => onOpenChat(u)}
+                    >
+                      💬
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
-      <ul>
-        {others.map((u) => {
-          const busy = !!u.busyWith;
-          const busyWithName = busy ? nameById.get(u.busyWith) : null;
-          return (
-            <li key={u.participantId} className={"contact-item" + (u.participantId === activePartnerId ? " active" : "")}>
-              <span className={"dot" + (busy ? " busy" : " online")} />
-              <span className="contact-info">
-                <span className="contact-name">{u.displayName}</span>
-                {busy && (
-                  <span className="contact-status">{busyWithName ? `On a call with ${busyWithName}` : "On another call"}</span>
-                )}
-              </span>
-              <span className="contact-actions">
-                <button className="icon-btn small" title="Open chat" aria-label={`Jump to chat, ${u.displayName}`} onClick={() => onOpenChat(u)}>
-                  💬
-                </button>
-                <button
-                  className="icon-btn small"
-                  title={busy ? "User is currently on another call" : "Voice call"}
-                  aria-label={`Voice call ${u.displayName}`}
-                  disabled={busy}
-                  onClick={() => onCall(u, "audio")}
-                >
-                  📞
-                </button>
-                <button
-                  className="icon-btn small"
-                  title={busy ? "User is currently on another call" : "Video call"}
-                  aria-label={`Video call ${u.displayName}`}
-                  disabled={busy}
-                  onClick={() => onCall(u, "video")}
-                >
-                  🎥
-                </button>
-              </span>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }

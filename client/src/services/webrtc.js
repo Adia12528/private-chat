@@ -1,4 +1,6 @@
-const STUN_SERVER = import.meta.env.VITE_STUN_SERVER || "stun:stun.l.google.com:19302";
+const DEFAULT_STUN =
+  "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:stun2.l.google.com:19302,stun:stun3.l.google.com:19302,stun:stun4.l.google.com:19302";
+const STUN_SERVER = import.meta.env.VITE_STUN_SERVER || DEFAULT_STUN;
 const TURN_SERVER = import.meta.env.VITE_TURN_SERVER;
 const TURN_USERNAME = import.meta.env.VITE_TURN_USERNAME;
 const TURN_PASSWORD = import.meta.env.VITE_TURN_PASSWORD;
@@ -63,7 +65,11 @@ export async function fetchIceServers() {
 
 export function createPeerConnection(handlers = {}, iceServers = null) {
   const activeServers = iceServers || cachedDynamicIceServers || buildIceServers();
-  const pc = new RTCPeerConnection({ iceServers: activeServers });
+  const pc = new RTCPeerConnection({
+    iceServers: activeServers,
+    bundlePolicy: "max-bundle",
+    iceCandidatePoolSize: 2,
+  });
 
   pc.onicecandidate = (e) => {
     if (e.candidate) {
@@ -73,15 +79,20 @@ export function createPeerConnection(handlers = {}, iceServers = null) {
       if (handlers.onIceCandidate) handlers.onIceCandidate(e.candidate);
     }
   };
+
   pc.ontrack = (e) => {
-    if (handlers.onTrack) handlers.onTrack(e.streams[0]);
+    const stream = e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]);
+    if (handlers.onTrack) handlers.onTrack(stream, e.track);
   };
+
   pc.onconnectionstatechange = () => {
     if (handlers.onStateChange) handlers.onStateChange(pc.connectionState);
   };
+
   pc.oniceconnectionstatechange = () => {
     if (handlers.onIceStateChange) handlers.onIceStateChange(pc.iceConnectionState);
   };
+
   return pc;
 }
 
@@ -90,8 +101,16 @@ export async function getLocalStream(mode) {
     throw new Error("unsupported");
   }
   return navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video: mode === "video",
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+    video: mode === "video" ? {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      facingMode: "user",
+    } : false,
   });
 }
 
@@ -104,6 +123,9 @@ export function closePeerConnection(pc) {
     pc.onicecandidate = null;
     pc.ontrack = null;
     pc.onconnectionstatechange = null;
-    pc.close();
+    pc.oniceconnectionstatechange = null;
+    try {
+      pc.close();
+    } catch {}
   }
 }

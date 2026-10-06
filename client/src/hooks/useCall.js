@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPeerConnection, getLocalStream, stopStream, closePeerConnection, fetchIceServers } from "../services/webrtc.js";
+import {
+  createPeerConnection,
+  getLocalStream,
+  stopStream,
+  closePeerConnection,
+  fetchIceServers,
+} from "../services/webrtc.js";
+import {
+  playRingtone,
+  playDialTone,
+  playCallConnected,
+  playCallEnded,
+  stopRingtone,
+} from "../utils/sound.js";
 
 export function useCall(socket) {
   const [incomingCall, setIncomingCall] = useState(null); // { from, fromName, mode, offer }
@@ -10,21 +23,30 @@ export function useCall(socket) {
   const [cameraOff, setCameraOff] = useState(false);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState("");
+  const [facingMode, setFacingMode] = useState("user");
 
   const pcRef = useRef(null);
   const partnerRef = useRef(null);
   const timerRef = useRef(null);
   const localStreamRef = useRef(null);
+  const pendingCandidatesRef = useRef([]);
+  const hasConnectedRef = useRef(false);
 
   useEffect(() => {
     fetchIceServers().catch(() => {});
   }, []);
 
   const cleanup = useCallback(() => {
+    stopRingtone();
+    hasConnectedRef.current = false;
+    pendingCandidatesRef.current = [];
+
     closePeerConnection(pcRef.current);
     pcRef.current = null;
+
     stopStream(localStreamRef.current);
     localStreamRef.current = null;
+
     setLocalStream(null);
     setRemoteStream(null);
     setCallState(null);
@@ -33,6 +55,7 @@ export function useCall(socket) {
     setCameraOff(false);
     setDuration(0);
     partnerRef.current = null;
+
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
   }, []);
@@ -45,21 +68,68 @@ export function useCall(socket) {
     }, 1000);
   }, []);
 
+  // Flush buffered ICE candidates onto RTCPeerConnection
+  const drainCandidates = useCallback(async (pc) => {
+    if (!pc || !pc.remoteDescription || !pc.remoteDescription.type) return;
+    const queued = [...pendingCandidatesRef.current];
+    pendingCandidatesRef.current = [];
+    for (const cand of queued) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(cand));
+      } catch (err) {
+        console.warn("[WebRTC] Error applying buffered ICE candidate:", err);
+      }
+    }
+  }, []);
+
   const setupPeer = useCallback(
     (toId, iceServers = null) => {
-      const pc = createPeerConnection({
-        onIceCandidate: (candidate) => socket.emit("call:ice", { to: toId, candidate }),
-        onTrack: (stream) => setRemoteStream(stream),
-        onStateChange: (state) => {
-          if (state === "connected") {
-            setCallState((s) => (s ? { ...s, status: "connected" } : s));
-            startTimer();
-          } else if (state === "failed") {
-            setError("Call connection failed. A TURN relay server may be needed for your network.");
-            cleanup();
-          }
+      const handleConnected = () => {
+        if (!hasConnectedRef.current) {
+          hasConnectedRef.current = true;
+          stopRingtone();
+          playCallConnected();
+          setCallState((s) => (s ? { ...s, status: "connected" } : s));
+          startTimer();
+        }
+      };
+
+      const pc = createPeerConnection(
+        {
+          onIceCandidate: (candidate) => {
+            socket.emit("call:ice", { to: toId, candidate });
+          },
+          onTrack: (stream, track) => {
+            setRemoteStream((prev) => {
+              if (!prev) return stream;
+              if (track && !prev.getTracks().some((t) => t.id === track.id)) {
+                prev.addTrack(track);
+              }
+              return new MediaStream(prev.getTracks());
+            });
+          },
+          onStateChange: (state) => {
+            if (state === "connected") {
+              handleConnected();
+            } else if (state === "failed") {
+              setError("Call connection failed. A network relay or firewall issue occurred.");
+              playCallEnded();
+              cleanup();
+            }
+          },
+          onIceStateChange: (iceState) => {
+            if (iceState === "connected" || iceState === "completed") {
+              handleConnected();
+            } else if (iceState === "failed") {
+              setError("Direct network connection could not be established.");
+              playCallEnded();
+              cleanup();
+            }
+          },
         },
-      }, iceServers);
+        iceServers
+      );
+
       pcRef.current = pc;
       return pc;
     },
@@ -69,22 +139,45 @@ export function useCall(socket) {
   const startCall = useCallback(
     async (toId, toName, mode) => {
       setError("");
+      pendingCandidatesRef.current = [];
+      hasConnectedRef.current = false;
+
       try {
         const [stream, iceServers] = await Promise.all([
           getLocalStream(mode),
           fetchIceServers().catch(() => null),
         ]);
+
         localStreamRef.current = stream;
         setLocalStream(stream);
         partnerRef.current = toId;
-        setCallState({ partnerId: toId, partnerName: toName, mode, direction: "outgoing", status: "calling" });
+        setCallState({
+          partnerId: toId,
+          partnerName: toName,
+          mode,
+          direction: "outgoing",
+          status: "calling",
+        });
+
+        playDialTone();
+
         const pc = setupPeer(toId, iceServers);
         stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-        const offer = await pc.createOffer();
+
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: mode === "video",
+        });
         await pc.setLocalDescription(offer);
+
         socket.emit("call:invite", { to: toId, mode, offer });
       } catch (err) {
-        setError(err.message === "unsupported" ? "Calling isn't supported in this browser." : "Microphone/camera permission was denied.");
+        stopRingtone();
+        setError(
+          err.message === "unsupported"
+            ? "Calling isn't supported in this browser."
+            : "Microphone or camera permission was denied."
+        );
         cleanup();
       }
     },
@@ -94,41 +187,64 @@ export function useCall(socket) {
   const acceptCall = useCallback(async () => {
     if (!incomingCall) return;
     const { from, fromName, mode, offer } = incomingCall;
+    stopRingtone();
     setError("");
+    hasConnectedRef.current = false;
+
     try {
       const [stream, iceServers] = await Promise.all([
         getLocalStream(mode),
         fetchIceServers().catch(() => null),
       ]);
+
       localStreamRef.current = stream;
       setLocalStream(stream);
       partnerRef.current = from;
-      setCallState({ partnerId: from, partnerName: fromName, mode, direction: "incoming", status: "connecting" });
+      setCallState({
+        partnerId: from,
+        partnerName: fromName,
+        mode,
+        direction: "incoming",
+        status: "connecting",
+      });
       setIncomingCall(null);
+
       const pc = setupPeer(from, iceServers);
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-      await pc.setRemoteDescription(offer);
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      // Flush any ICE candidates that arrived before user accepted
+      await drainCandidates(pc);
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+
       socket.emit("call:answer", { to: from, answer });
     } catch (err) {
-      setError(err.message === "unsupported" ? "Calling isn't supported in this browser." : "Microphone/camera permission was denied.");
+      setError(
+        err.message === "unsupported"
+          ? "Calling isn't supported in this browser."
+          : "Microphone or camera permission was denied."
+      );
       socket.emit("call:reject", { to: from });
       cleanup();
     }
-  }, [incomingCall, setupPeer, socket, cleanup]);
+  }, [incomingCall, setupPeer, socket, drainCandidates, cleanup]);
 
   const rejectCall = useCallback(() => {
+    stopRingtone();
     if (incomingCall) socket.emit("call:reject", { to: incomingCall.from });
     setIncomingCall(null);
   }, [incomingCall, socket]);
 
   const endCall = useCallback(() => {
+    playCallEnded();
     if (partnerRef.current) socket.emit("call:end", { to: partnerRef.current });
     cleanup();
   }, [socket, cleanup]);
 
   const cancelOutgoing = useCallback(() => {
+    playCallEnded();
     if (partnerRef.current) socket.emit("call:cancel", { to: partnerRef.current });
     cleanup();
   }, [socket, cleanup]);
@@ -151,45 +267,109 @@ export function useCall(socket) {
     });
   }, []);
 
+  const switchCamera = useCallback(async () => {
+    if (!localStreamRef.current || callState?.mode !== "video") return;
+    try {
+      const nextMode = facingMode === "user" ? "environment" : "user";
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: nextMode },
+      });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (!newVideoTrack) return;
+
+      const currentVideoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (currentVideoTrack) {
+        localStreamRef.current.removeTrack(currentVideoTrack);
+        currentVideoTrack.stop();
+      }
+      localStreamRef.current.addTrack(newVideoTrack);
+
+      if (pcRef.current) {
+        const sender = pcRef.current.getSenders().find((s) => s.track && s.track.kind === "video");
+        if (sender) {
+          await sender.replaceTrack(newVideoTrack);
+        }
+      }
+
+      setFacingMode(nextMode);
+      setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+    } catch (e) {
+      console.warn("Could not switch camera:", e);
+    }
+  }, [facingMode, callState]);
+
   useEffect(() => {
     function onInvite({ from, fromName, mode, offer }) {
       if (callState || incomingCall) {
         socket.emit("call:reject", { to: from }); // already busy
         return;
       }
+      playRingtone();
       setIncomingCall({ from, fromName, mode, offer });
     }
-    function onAnswer({ answer }) {
-      if (pcRef.current) {
-        pcRef.current.setRemoteDescription(answer);
-        setCallState((s) => (s ? { ...s, status: "connecting" } : s));
+
+    async function onAnswer({ answer }) {
+      const pc = pcRef.current;
+      if (pc) {
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          await drainCandidates(pc);
+          setCallState((s) => (s ? { ...s, status: "connecting" } : s));
+        } catch (err) {
+          console.error("[WebRTC] Error setting remote description for answer:", err);
+        }
       }
     }
-    function onIce({ candidate }) {
-      if (pcRef.current && candidate) {
-        pcRef.current.addIceCandidate(candidate).catch(() => {});
+
+    async function onIce({ candidate }) {
+      if (!candidate) return;
+      const pc = pcRef.current;
+      if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.warn("[WebRTC] Error adding ICE candidate:", err);
+        }
+      } else {
+        // Buffer candidate until remoteDescription is set!
+        pendingCandidatesRef.current.push(candidate);
       }
     }
+
     function onReject() {
+      playCallEnded();
       setError("Call declined.");
       cleanup();
     }
+
     function onEnd() {
+      playCallEnded();
       cleanup();
     }
+
     function onCancel() {
+      stopRingtone();
       setIncomingCall(null);
     }
+
     function onBusy({ toName }) {
-      setError(`${toName || "They"} are currently on another call.`);
+      playCallEnded();
+      setError(`${toName || "User"} is currently on another call.`);
       cleanup();
     }
+
     function onUnavailable() {
-      setError("That person is no longer available.");
+      playCallEnded();
+      setError("That user is no longer available.");
       cleanup();
     }
+
     function onPeerLeft({ participantId }) {
-      if (partnerRef.current === participantId) cleanup();
+      if (partnerRef.current === participantId) {
+        playCallEnded();
+        cleanup();
+      }
     }
 
     socket.on("call:invite", onInvite);
@@ -213,7 +393,7 @@ export function useCall(socket) {
       socket.off("call:unavailable", onUnavailable);
       socket.off("call:peer-left", onPeerLeft);
     };
-  }, [socket, callState, incomingCall, cleanup]);
+  }, [socket, callState, incomingCall, drainCandidates, cleanup]);
 
   return {
     incomingCall,
@@ -223,6 +403,7 @@ export function useCall(socket) {
     duration,
     muted,
     cameraOff,
+    facingMode,
     error,
     startCall,
     acceptCall,
@@ -231,5 +412,6 @@ export function useCall(socket) {
     cancelOutgoing,
     toggleMute,
     toggleCamera,
+    switchCamera,
   };
 }
