@@ -1,4 +1,4 @@
-// Lightweight Web Audio API synthesizer for calling feedback without external audio files
+// Lightweight Web Audio API synthesizer for calling feedback and notifications without external audio files
 let audioCtx = null;
 
 function getAudioContext() {
@@ -127,5 +127,35 @@ export function playCallEnded() {
     gain.connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 0.25);
+  } catch {}
+}
+
+export function playNotificationSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    // Pleasant soft two-tone chime (E5 -> G#5)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(659.25, now);
+    gain1.gain.setValueAtTime(0.08, now);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.25);
+
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(830.61, now + 0.1);
+    gain2.gain.setValueAtTime(0.08, now + 0.1);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.1);
+    osc2.stop(now + 0.35);
   } catch {}
 }

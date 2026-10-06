@@ -90,12 +90,19 @@ export function registerSocketHandlers(io, socket) {
       if (!accountExists(id)) {
         // Brand-new ID — nothing to verify yet. They'll create this room
         // for real (claiming this password) once they pick a display name.
-        return cb({ ok: true, isNew: true });
+        return cb({ ok: true, isNew: true, onlineCount: 0, members: [] });
       }
       if (!verifyCredentials(id, password)) {
         return cb({ ok: false, error: "Invalid ID or password." });
       }
-      cb({ ok: true, isNew: false });
+      const roomId = roomIdFor(id);
+      const members = getRoomMembers(roomId);
+      cb({
+        ok: true,
+        isNew: false,
+        onlineCount: members.length,
+        members,
+      });
     })
   );
 
@@ -128,6 +135,13 @@ export function registerSocketHandlers(io, socket) {
 
       const members = getRoomMembers(roomId);
       cb({ ok: true, participantId: myParticipantId, roomId, isNew, members });
+
+      // Notify other members in this room immediately
+      socket.to(roomId).emit("room:user-joined", {
+        participantId: myParticipantId,
+        displayName: name,
+        ts: Date.now(),
+      });
       broadcastPresence(io, roomId);
     })
   );
@@ -333,7 +347,15 @@ export function registerSocketHandlers(io, socket) {
       if (partner) io.to(partner).emit("call:peer-left", { participantId: myParticipantId });
 
       if (rooms.has(myRoomId)) {
+        const leavingName = socket.data.displayName || "Someone";
         rooms.get(myRoomId).delete(myParticipantId);
+        
+        io.to(myRoomId).emit("room:user-left", {
+          participantId: myParticipantId,
+          displayName: leavingName,
+          ts: Date.now(),
+        });
+
         if (rooms.get(myRoomId).size === 0) {
           rooms.delete(myRoomId);
           // Frees a self-created ID once its room is empty (no-op for

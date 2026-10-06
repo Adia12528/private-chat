@@ -69,6 +69,16 @@ export function useChatMessages(socket, roomId, myParticipantId, myDisplayName) 
   const exportChat = useCallback((format) => storage.exportMessages(roomId, format), [roomId]);
   const searchChat = useCallback((query) => storage.searchMessages(roomId, query), [roomId]);
 
+  const addSystemMessage = useCallback((text) => {
+    const msg = {
+      id: generateId(),
+      system: true,
+      text,
+      ts: Date.now(),
+    };
+    setMessages((prev) => [...prev, msg]);
+  }, []);
+
   useEffect(() => {
     function onMessage(msg) {
       persist((prev) => [...prev, msg]);
@@ -105,5 +115,16 @@ export function useChatMessages(socket, roomId, myParticipantId, myDisplayName) 
     };
   }, [socket, persist]);
 
-  return { messages, typingUsers, sendMessage, editMessage, deleteMessage, setTyping, clearChat, exportChat, searchChat };
+  return {
+    messages,
+    typingUsers,
+    sendMessage,
+    editMessage,
+    deleteMessage,
+    setTyping,
+    clearChat,
+    exportChat,
+    searchChat,
+    addSystemMessage,
+  };
 }

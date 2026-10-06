@@ -14,7 +14,7 @@ export function usePresence(socket, initialMembers = [], roomId = null) {
   // Fetch presence on demand (for reconnections, initial mount, and manual refresh)
   const requestPresence = useCallback(() => {
     socket.emit("presence:request", { roomId }, (users) => {
-      if (Array.isArray(users) && users.length > 0) {
+      if (Array.isArray(users)) {
         setOnlineUsers(users);
       }
     });

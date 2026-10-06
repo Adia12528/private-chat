@@ -14,6 +14,7 @@ export default function Login({ onJoined }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [isNewRoom, setIsNewRoom] = useState(false);
+  const [roomOnlineInfo, setRoomOnlineInfo] = useState({ count: 0, members: [] });
 
   function handleCredentialsSubmit(e) {
     e.preventDefault();
@@ -32,6 +33,10 @@ export default function Login({ onJoined }) {
         return;
       }
       setIsNewRoom(!!res.isNew);
+      setRoomOnlineInfo({
+        count: res.onlineCount || 0,
+        members: res.members || [],
+      });
       setStep(STEPS.NAME);
     });
   }
@@ -145,8 +150,34 @@ export default function Login({ onJoined }) {
           <form onSubmit={handleNameSubmit} className="login-form">
             <div className="room-joined-pill">
               <span>Room: <strong>{id.trim()}</strong></span>
-              {isNewRoom && <span className="new-tag">✨ Creating New Room</span>}
+              {isNewRoom ? (
+                <span className="new-tag">✨ Creating New Room</span>
+              ) : (
+                <span className={"live-members-badge " + (roomOnlineInfo.count > 0 ? "active" : "empty")}>
+                  <span className={"pulse-dot " + (roomOnlineInfo.count > 0 ? "online" : "offline")} />
+                  {roomOnlineInfo.count === 0 ? "Room empty" : `${roomOnlineInfo.count} online`}
+                </span>
+              )}
             </div>
+
+            {!isNewRoom && roomOnlineInfo.count > 0 && (
+              <div className="login-online-notice">
+                <div className="online-notice-title">
+                  <span className="pulse-dot online" />
+                  <span>
+                    <strong>{roomOnlineInfo.count} {roomOnlineInfo.count === 1 ? "person is" : "people are"} currently online:</strong>
+                  </span>
+                </div>
+                <div className="online-notice-names">
+                  {roomOnlineInfo.members.map((m) => (
+                    <span key={m.participantId} className="online-name-pill">
+                      <span className="pill-avatar">{m.displayName?.[0]?.toUpperCase() || "?"}</span>
+                      <span className="pill-name">{m.displayName}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="form-group">
               <label htmlFor="display-name" className="form-label">

@@ -23,6 +23,7 @@ import {
   LogOutIcon,
   FileTextIcon,
 } from "../components/UI/Icons.jsx";
+import { playNotificationSound } from "../utils/sound.js";
 
 export default function ChatRoom({ session, theme, setTheme, onLeave }) {
   const [myParticipantId, setMyParticipantId] = useState(session.participantId);
@@ -41,6 +42,7 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
     clearChat,
     exportChat,
     searchChat,
+    addSystemMessage,
   } = useChatMessages(socket, session.roomId, myParticipantId, session.displayName);
   const call = useCall(socket);
   const { toasts, push } = useToasts();
@@ -79,6 +81,46 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
   useEffect(() => {
     if (call.error) push(call.error);
   }, [call.error, push]);
+
+  // Announce members already online when entering the room
+  const initialAnnouncedRef = useRef(false);
+  useEffect(() => {
+    if (initialAnnouncedRef.current) return;
+    initialAnnouncedRef.current = true;
+    const initialOthers = (session.members || []).filter(
+      (u) => u.participantId !== session.participantId
+    );
+    if (initialOthers.length > 0) {
+      const names = initialOthers.map((u) => u.displayName).join(", ");
+      addSystemMessage(`🟢 Currently online in this room: ${names}`);
+    }
+  }, [session.members, session.participantId, addSystemMessage]);
+
+  // Real-time listener for users joining / leaving the room
+  useEffect(() => {
+    function onUserJoined({ displayName }) {
+      if (!displayName) return;
+      addSystemMessage(`👋 ${displayName} joined the room`);
+      push(`👋 ${displayName} joined the room`);
+      playNotificationSound();
+      requestPresence();
+    }
+
+    function onUserLeft({ displayName }) {
+      if (!displayName) return;
+      addSystemMessage(`🚪 ${displayName} left the room`);
+      push(`🚪 ${displayName} left the room`);
+      requestPresence();
+    }
+
+    socket.on("room:user-joined", onUserJoined);
+    socket.on("room:user-left", onUserLeft);
+
+    return () => {
+      socket.off("room:user-joined", onUserJoined);
+      socket.off("room:user-left", onUserLeft);
+    };
+  }, [socket, addSystemMessage, push, requestPresence]);
 
   useEffect(() => {
     function onVisible() {
@@ -303,9 +345,16 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
             <div className="chat-title-group">
               <h1 className="chat-header-title">Room: {session.accountId}</h1>
               <span className="chat-header-sub">
-                {otherUsers.length === 0
-                  ? "Only you in room"
-                  : `${otherUsers.length} other${otherUsers.length > 1 ? "s" : ""} online`}
+                {otherUsers.length === 0 ? (
+                  <span className="sub-status solo">⚪ Only you in room</span>
+                ) : (
+                  <span className="sub-status active">
+                    <span className="sub-dot online" />
+                    {otherUsers.length === 1
+                      ? `${otherUsers[0].displayName} is online`
+                      : `${otherUsers.length} online (${otherUsers.map((u) => u.displayName).join(", ")})`}
+                  </span>
+                )}
               </span>
             </div>
           </div>
@@ -397,6 +446,52 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
             </div>
           )}
         </header>
+
+        {/* Active Members Bar - Visible on both Mobile and Desktop */}
+        <div className="active-presence-ribbon">
+          <div className="active-presence-left">
+            <span className="live-status-pulse" />
+            <span className="active-presence-label">
+              {onlineUsers.length > 1
+                ? `${onlineUsers.length} in room:`
+                : "In room:"}
+            </span>
+            <div className="active-members-chips">
+              {onlineUsers.map((u) => {
+                const isMe = u.participantId === myParticipantId;
+                const isBusy = !!u.busyWith;
+                return (
+                  <span
+                    key={u.participantId}
+                    className={`member-chip ${isMe ? "me" : "other"} ${isBusy ? "busy" : "online"}`}
+                    title={isMe ? `${u.displayName} (You)` : `${u.displayName} (${isBusy ? "In call" : "Online"})`}
+                  >
+                    <span className="chip-avatar">
+                      {u.displayName?.[0]?.toUpperCase() || "?"}
+                    </span>
+                    <span className="chip-name">
+                      {u.displayName}
+                      {isMe ? " (You)" : ""}
+                    </span>
+                    <span className={`chip-dot ${isBusy ? "busy" : "online"}`} />
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          {otherUsers.length > 0 && (
+            <div className="active-presence-quickcall">
+              <button
+                className="chip-quick-call-btn"
+                onClick={() => handleHeaderCall("audio")}
+                title="Voice call with room"
+              >
+                <PhoneIcon size={12} /> Call
+              </button>
+            </div>
+          )}
+        </div>
 
         <MessageList
           messages={messages}

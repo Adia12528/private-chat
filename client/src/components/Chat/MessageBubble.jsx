@@ -51,6 +51,18 @@ export default function MessageBubble({ message, isMine, onReply, onEdit, onDele
   const hasFile = !!message.file && !!message.file.data;
   const isImage = hasFile && (message.file.type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(message.file.name));
 
+  if (message.system) {
+    return (
+      <div className="system-msg-row">
+        <span className="system-msg-pill">
+          <span className="system-dot online" />
+          <span className="system-text">{message.text}</span>
+          <span className="system-time">{formatTime(message.ts)}</span>
+        </span>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className={"msg-row " + (isMine ? "me" : "them")}>
