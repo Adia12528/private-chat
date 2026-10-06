@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 import { socket } from "../services/socket.js";
 import { usePresence } from "../hooks/usePresence.js";
 import { useChatMessages } from "../hooks/useChatMessages.js";
@@ -16,7 +16,12 @@ import IncomingCallModal from "../components/Calls/IncomingCallModal.jsx";
 import CallOverlay from "../components/Calls/CallOverlay.jsx";
 
 export default function ChatRoom({ session, theme, setTheme, onLeave }) {
-  const { onlineUsers, status } = usePresence(socket);
+  const [myParticipantId, setMyParticipantId] = useState(session.participantId);
+  const { onlineUsers, status, setOnlineUsers, requestPresence } = usePresence(
+    socket,
+    session.members,
+    session.roomId
+  );
   const {
     messages,
     typingUsers,
@@ -27,7 +32,7 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
     clearChat,
     exportChat,
     searchChat,
-  } = useChatMessages(socket, session.roomId, session.participantId, session.displayName);
+  } = useChatMessages(socket, session.roomId, myParticipantId, session.displayName);
   const call = useCall(socket);
   const { toasts, push } = useToasts();
 
@@ -38,6 +43,29 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const headerMenuRef = useRef(null);
+
+  // Auto-rejoin on socket reconnect
+  useEffect(() => {
+    function handleReconnect() {
+      socket.emit(
+        "room:rejoin",
+        { id: session.accountId, password: session.password, displayName: session.displayName },
+        (res) => {
+          if (res.ok) {
+            session.participantId = res.participantId;
+            setMyParticipantId(res.participantId);
+            if (Array.isArray(res.members) && res.members.length > 0) {
+              setOnlineUsers(res.members);
+            } else {
+              requestPresence();
+            }
+          }
+        }
+      );
+    }
+    socket.io.on("reconnect", handleReconnect);
+    return () => socket.io.off("reconnect", handleReconnect);
+  }, [session, requestPresence, setOnlineUsers]);
 
   useEffect(() => {
     if (call.error) push(call.error);
@@ -77,8 +105,8 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
 
   const highlightIds = useMemo(() => new Set(searchResults.map((m) => m.id)), [searchResults]);
   const otherUsers = useMemo(
-    () => onlineUsers.filter((u) => u.participantId !== session.participantId),
-    [onlineUsers, session.participantId]
+    () => onlineUsers.filter((u) => u.participantId !== myParticipantId),
+    [onlineUsers, myParticipantId]
   );
 
   function handleCall(user, mode) {
@@ -208,7 +236,7 @@ export default function ChatRoom({ session, theme, setTheme, onLeave }) {
 
         <UserList
           users={onlineUsers}
-          myParticipantId={session.participantId}
+          myParticipantId={myParticipantId}
           onCall={handleCall}
           onOpenChat={handleOpenChat}
           activePartnerId={activePartnerId}

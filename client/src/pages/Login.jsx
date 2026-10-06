@@ -59,6 +59,7 @@ export default function Login({ onJoined }) {
         displayName: name,
         roomId: res.roomId,
         participantId: res.participantId,
+        members: res.members || [],
       });
     });
   }

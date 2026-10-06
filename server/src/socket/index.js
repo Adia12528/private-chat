@@ -126,8 +126,63 @@ export function registerSocketHandlers(io, socket) {
       if (!rooms.has(roomId)) rooms.set(roomId, new Map());
       rooms.get(roomId).set(myParticipantId, { displayName: name });
 
-      cb({ ok: true, participantId: myParticipantId, roomId, isNew });
+      const members = getRoomMembers(roomId);
+      cb({ ok: true, participantId: myParticipantId, roomId, isNew, members });
       broadcastPresence(io, roomId);
+    })
+  );
+
+  // Let a client re-join after a socket reconnect (new socket id, same credentials)
+  socket.on(
+    "room:rejoin",
+    safe(({ id, password, displayName } = {}, cb) => {
+
+
+      
+      if (typeof cb !== "function") return;
+      if (!id || !password) return cb({ ok: false, error: "Missing credentials." });
+      const name = String(displayName || "").trim().slice(0, MAX_NAME_LENGTH);
+      if (!name) return cb({ ok: false, error: "Display name is required." });
+
+      // Clean up any previous room membership for this socket
+      if (myRoomId && rooms.has(myRoomId)) {
+        rooms.get(myRoomId).delete(myParticipantId);
+        if (rooms.get(myRoomId).size === 0) rooms.delete(myRoomId);
+        socket.leave(myRoomId);
+        broadcastPresence(io, myRoomId);
+      }
+
+      if (!accountExists(id)) return cb({ ok: false, error: "Room no longer exists." });
+      if (!verifyCredentials(id, password)) return cb({ ok: false, error: "Invalid credentials." });
+
+      const roomId = roomIdFor(id);
+      myRoomId = roomId;
+      myAccountId = String(id).trim().slice(0, MAX_NAME_LENGTH);
+      myParticipantId = socket.id;
+      socket.data.roomId = roomId;
+      socket.data.displayName = name;
+
+      socket.join(roomId);
+      if (!rooms.has(roomId)) rooms.set(roomId, new Map());
+      rooms.get(roomId).set(myParticipantId, { displayName: name });
+
+      const members = getRoomMembers(roomId);
+      cb({ ok: true, participantId: myParticipantId, roomId, members });
+      broadcastPresence(io, roomId);
+    })
+  );
+
+  // Let a client request the current presence list on demand
+  socket.on(
+    "presence:request",
+    safe((data, cb) => {
+      if (typeof cb !== "function") return;
+      const targetRoom =
+        myRoomId ||
+        (data?.roomId && rooms.has(data.roomId) ? data.roomId : null) ||
+        (data?.accountId ? roomIdFor(data.accountId) : null);
+      if (!targetRoom) return cb([]);
+      cb(getRoomMembers(targetRoom));
     })
   );
 
