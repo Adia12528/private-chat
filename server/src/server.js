@@ -13,13 +13,31 @@ const server = http.createServer(app);
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 const allowedOrigins = CLIENT_URL.split(",").map((o) => o.trim()).filter(Boolean);
 
-app.use(cors({ origin: allowedOrigins }));
+const checkOrigin = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+    return callback(null, true);
+  }
+  // Allow local network connections (e.g. testing phone <-> laptop over Wi-Fi)
+  if (
+    /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(
+      origin
+    )
+  ) {
+    return callback(null, true);
+  }
+  return callback(null, true);
+};
+
+app.use(cors({ origin: checkOrigin, credentials: true }));
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: checkOrigin,
     methods: ["GET", "POST"],
+    credentials: true,
   },
+  maxHttpBufferSize: 5e7, // 50MB for peer file and image transfer
 });
 
 app.get("/health", (req, res) => res.json({ ok: true }));

@@ -1,3 +1,5 @@
+import { PhoneIcon, VideoIcon } from "../UI/Icons.jsx";
+
 export default function UserList({
   users,
   myParticipantId,
@@ -70,7 +72,7 @@ export default function UserList({
                     disabled={busy}
                     onClick={() => onCall(u, "audio")}
                   >
-                    📞
+                    <PhoneIcon size={14} />
                   </button>
                   <button
                     className="action-pill-btn video"
@@ -79,7 +81,7 @@ export default function UserList({
                     disabled={busy}
                     onClick={() => onCall(u, "video")}
                   >
-                    🎥
+                    <VideoIcon size={14} />
                   </button>
                   {onOpenChat && (
                     <button
@@ -88,7 +90,9 @@ export default function UserList({
                       aria-label="Jump to chat"
                       onClick={() => onOpenChat(u)}
                     >
-                      💬
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      </svg>
                     </button>
                   )}
                 </div>

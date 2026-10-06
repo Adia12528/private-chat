@@ -39,12 +39,31 @@ export function saveMessages(roomId, messages) {
   if (!roomId) return;
   try {
     if (AVAILABLE) {
-      localStorage.setItem(key(roomId), JSON.stringify(messages));
+      try {
+        localStorage.setItem(key(roomId), JSON.stringify(messages));
+      } catch (err) {
+        // If quota exceeded due to large base64 files, strip heavy file data but keep preview/metadata
+        const lean = messages.map((m) => {
+          if (m.file && m.file.data && m.file.data.length > 200000) {
+            return {
+              ...m,
+              file: {
+                name: m.file.name,
+                size: m.file.size,
+                type: m.file.type,
+                data: m.file.type.startsWith("image/") ? m.file.data.slice(0, 50000) : null,
+              },
+            };
+          }
+          return m;
+        });
+        localStorage.setItem(key(roomId), JSON.stringify(lean));
+      }
     } else {
       memoryStore.set(roomId, messages);
     }
   } catch (err) {
-    console.error("Could not save chat history locally (storage may be full).", err);
+    console.error("Could not save chat history locally.", err);
   }
 }
 

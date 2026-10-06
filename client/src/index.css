@@ -62,13 +62,13 @@
   --text: #edf0ff;
   --text-muted: #8b90b0;
   --text-dim: #575d80;
-  --border: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
   --border-light: rgba(255, 255, 255, 0.04);
 
   --accent: #8b7cf7;
   --accent-hover: #a18aff;
-  --accent-light: rgba(139, 124, 247, 0.1);
-  --accent-glow: rgba(139, 124, 247, 0.3);
+  --accent-light: rgba(139, 124, 247, 0.12);
+  --accent-glow: rgba(139, 124, 247, 0.35);
   --accent-gradient: linear-gradient(135deg, #6c5ce7 0%, #a18aff 50%, #c4b8ff 100%);
   --accent-gradient-btn: linear-gradient(135deg, #6c5ce7 0%, #8b7cf7 100%);
 
@@ -89,8 +89,88 @@
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.4);
   --shadow-xl: 0 24px 50px rgba(0, 0, 0, 0.5);
 
-  --glass-bg: rgba(18, 20, 31, 0.8);
-  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-bg: rgba(18, 20, 31, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+}
+
+/* Cyber OLED — True Pitch Black #000000 with Cyan Glow */
+[data-theme="oled"] {
+  --bg: #000000;
+  --surface: #0a0b10;
+  --surface-2: #10121a;
+  --surface-3: #181c28;
+  --text: #f0f6fc;
+  --text-muted: #8b949e;
+  --text-dim: #484f58;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-light: rgba(255, 255, 255, 0.05);
+
+  --accent: #00e5ff;
+  --accent-hover: #33ebff;
+  --accent-light: rgba(0, 229, 255, 0.12);
+  --accent-glow: rgba(0, 229, 255, 0.4);
+  --accent-gradient: linear-gradient(135deg, #0096c7 0%, #00e5ff 100%);
+  --accent-gradient-btn: linear-gradient(135deg, #0077b6 0%, #00b4d8 100%);
+
+  --bubble-me: linear-gradient(135deg, #0077b6 0%, #00b4d8 100%);
+  --bubble-me-text: #ffffff;
+  --bubble-them: #10121a;
+  --bubble-them-text: #f0f6fc;
+
+  --danger: #ff4d6d;
+  --danger-light: rgba(255, 77, 109, 0.12);
+  --success: #00f5d4;
+  --success-light: rgba(0, 245, 212, 0.12);
+  --warning: #fee440;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.6);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.85);
+  --shadow-xl: 0 24px 50px rgba(0, 0, 0, 0.95);
+
+  --glass-bg: rgba(10, 11, 16, 0.9);
+  --glass-border: rgba(0, 229, 255, 0.12);
+}
+
+/* Emerald Night — Deep Forest & Neon Mint Glow */
+[data-theme="emerald"] {
+  --bg: #050f0b;
+  --surface: #0a1b14;
+  --surface-2: #10261d;
+  --surface-3: #18382b;
+  --text: #e6f7ef;
+  --text-muted: #7da594;
+  --text-dim: #496a5d;
+  --border: rgba(16, 185, 129, 0.12);
+  --border-light: rgba(16, 185, 129, 0.06);
+
+  --accent: #10b981;
+  --accent-hover: #34d399;
+  --accent-light: rgba(16, 185, 129, 0.12);
+  --accent-glow: rgba(16, 185, 129, 0.35);
+  --accent-gradient: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  --accent-gradient-btn: linear-gradient(135deg, #047857 0%, #10b981 100%);
+
+  --bubble-me: linear-gradient(135deg, #047857 0%, #10b981 100%);
+  --bubble-me-text: #ffffff;
+  --bubble-them: #10261d;
+  --bubble-them-text: #e6f7ef;
+
+  --danger: #f87171;
+  --danger-light: rgba(248, 113, 113, 0.12);
+  --success: #34d399;
+  --success-light: rgba(52, 211, 153, 0.12);
+  --warning: #fbbf24;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --shadow-xl: 0 24px 50px rgba(0, 0, 0, 0.7);
+
+  --glass-bg: rgba(10, 27, 20, 0.9);
+  --glass-border: rgba(16, 185, 129, 0.15);
 }
 
 /* Base resets */
@@ -2250,4 +2330,352 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* ==========================================================
+   Theme Indicator Dots & Enhancements
+   ========================================================== */
+.theme-dot-oled {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #00e5ff;
+  box-shadow: 0 0 10px #00e5ff;
+  display: inline-block;
+}
+
+.theme-dot-emerald {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  display: inline-block;
+}
+
+.theme-btn-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  margin-left: 3px;
+}
+
+/* ==========================================================
+   File & Image Attachments (Message Input Bar)
+   ========================================================== */
+.attach-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.attach-btn:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+.attach-btn.has-file {
+  color: var(--accent);
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+
+.file-preview-bar {
+  padding: 8px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: slideDown 0.18s ease-out;
+}
+
+.file-preview-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  max-width: 100%;
+  box-shadow: var(--shadow-xs);
+}
+
+.preview-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.preview-file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.preview-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.preview-filename {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-filesize {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.preview-remove-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  transition: all 0.15s;
+}
+
+.preview-remove-btn:hover {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.file-error-badge {
+  padding: 6px 16px;
+  background: var(--danger-light);
+  color: var(--danger);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--danger);
+}
+
+/* ==========================================================
+   Bubble Attachment Cards & Images
+   ========================================================== */
+.bubble-attachment {
+  margin-bottom: 6px;
+}
+
+.bubble-image-wrap {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  max-width: 320px;
+  max-height: 380px;
+  cursor: pointer;
+}
+
+.bubble-image {
+  width: 100%;
+  max-height: 380px;
+  object-fit: cover;
+  display: block;
+  border-radius: 10px;
+  transition: transform 0.2s ease;
+}
+
+.bubble-image-wrap:hover .bubble-image {
+  transform: scale(1.02);
+}
+
+.image-overlay-actions {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.bubble-image-wrap:hover .image-overlay-actions {
+  opacity: 1;
+}
+
+.attachment-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.attachment-download-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  transform: scale(1.04);
+}
+
+.bubble-file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-width: 320px;
+}
+
+.me .bubble-file-card {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.file-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.file-info-box {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.file-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+
+.file-size {
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
+/* ==========================================================
+   Image Lightbox Modal
+   ========================================================== */
+.image-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(16px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.18s ease-out;
+}
+
+.image-lightbox-content {
+  display: flex;
+  flex-direction: column;
+  max-width: 90vw;
+  max-height: 90vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+}
+
+.lightbox-header {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.lightbox-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+.lightbox-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lightbox-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: var(--accent-gradient-btn);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.lightbox-btn:hover {
+  transform: scale(1.04);
+}
+
+.lightbox-btn.close {
+  background: var(--surface-3);
+  color: var(--text);
+  padding: 6px;
+  border-radius: 50%;
+}
+
+.lightbox-btn.close:hover {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.lightbox-img {
+  max-width: 85vw;
+  max-height: 80vh;
+  object-fit: contain;
+  display: block;
+  background: #000;
 }

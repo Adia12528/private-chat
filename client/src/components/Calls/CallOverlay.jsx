@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "../../utils/helpers.js";
+import {
+  MicIcon,
+  MicOffIcon,
+  VideoIcon,
+  VideoOffIcon,
+  PhoneOffIcon,
+  SwitchCameraIcon,
+  MinimizeIcon,
+  MaximizeIcon,
+} from "../UI/Icons.jsx";
 
 export default function CallOverlay({
   callState,
@@ -19,19 +29,24 @@ export default function CallOverlay({
   const [minimized, setMinimized] = useState(false);
 
   useEffect(() => {
-    if (localRef.current) {
-      localRef.current.srcObject = localStream || null;
+    const el = localRef.current;
+    if (el) {
+      el.srcObject = localStream || null;
       if (localStream) {
-        localRef.current.play().catch(() => {});
+        el.play().catch(() => {});
       }
     }
   }, [localStream]);
 
   useEffect(() => {
-    if (remoteRef.current) {
-      remoteRef.current.srcObject = remoteStream || null;
+    const el = remoteRef.current;
+    if (el) {
+      el.srcObject = remoteStream || null;
       if (remoteStream) {
-        remoteRef.current.play().catch(() => {});
+        el.onloadedmetadata = () => {
+          el.play().catch(() => {});
+        };
+        el.play().catch(() => {});
       }
     }
   }, [remoteStream]);
@@ -44,10 +59,10 @@ export default function CallOverlay({
   const statusLabel =
     {
       calling: "Ringing…",
-      connecting: "Connecting network…",
+      connecting: "Connecting…",
       connected: formatDuration(duration),
       failed: "Connection failed",
-    }[callState.status] || "Connecting…";
+    }[callState.status] || (isConnected ? formatDuration(duration) : "Connecting…");
 
   // Minimized Floating Pip View
   if (minimized) {
@@ -64,13 +79,13 @@ export default function CallOverlay({
             onClick={onMute}
             aria-label={muted ? "Unmute" : "Mute"}
           >
-            {muted ? "🔇" : "🎤"}
+            {muted ? <MicOffIcon size={16} /> : <MicIcon size={16} />}
           </button>
           <button className="mini-btn expand" onClick={() => setMinimized(false)} aria-label="Expand call">
-            ⛶
+            <MaximizeIcon size={16} />
           </button>
           <button className="mini-btn end" onClick={onEnd} aria-label="End call">
-            ⛔
+            <PhoneOffIcon size={16} />
           </button>
         </div>
       </div>
@@ -94,7 +109,7 @@ export default function CallOverlay({
           title="Minimize to chat"
           aria-label="Minimize call"
         >
-          🗗 Minimize
+          <MinimizeIcon size={15} /> Minimize
         </button>
       </div>
 
@@ -121,7 +136,7 @@ export default function CallOverlay({
         )}
 
         {/* Audio call or waiting for remote video placeholder */}
-        {(!isVideo || !remoteStream || !isConnected) && (
+        {(!isVideo || !remoteStream) && (
           <div className="call-avatar-stage">
             <div className={"avatar-pulse-ring " + (isConnected ? "connected" : "pulsing")}>
               <div className="avatar-circle">
@@ -145,7 +160,7 @@ export default function CallOverlay({
           title={muted ? "Unmute microphone" : "Mute microphone"}
           aria-label={muted ? "Unmute" : "Mute"}
         >
-          <span className="btn-icon">{muted ? "🔇" : "🎤"}</span>
+          <span className="btn-icon">{muted ? <MicOffIcon size={20} /> : <MicIcon size={20} />}</span>
           <span className="btn-label">{muted ? "Unmute" : "Mute"}</span>
         </button>
 
@@ -157,7 +172,7 @@ export default function CallOverlay({
               title={cameraOff ? "Turn camera on" : "Turn camera off"}
               aria-label={cameraOff ? "Turn camera on" : "Turn camera off"}
             >
-              <span className="btn-icon">{cameraOff ? "📷" : "📹"}</span>
+              <span className="btn-icon">{cameraOff ? <VideoOffIcon size={20} /> : <VideoIcon size={20} />}</span>
               <span className="btn-label">{cameraOff ? "Start Video" : "Stop Video"}</span>
             </button>
 
@@ -168,7 +183,7 @@ export default function CallOverlay({
                 title="Switch Camera (Front/Rear)"
                 aria-label="Switch Camera"
               >
-                <span className="btn-icon">🔄</span>
+                <span className="btn-icon"><SwitchCameraIcon size={20} /></span>
                 <span className="btn-label">Flip Cam</span>
               </button>
             )}
@@ -181,7 +196,7 @@ export default function CallOverlay({
           title={callState.status === "calling" ? "Cancel call" : "End call"}
           aria-label={callState.status === "calling" ? "Cancel call" : "End call"}
         >
-          <span className="btn-icon">⛔</span>
+          <span className="btn-icon"><PhoneOffIcon size={20} /></span>
           <span className="btn-label">{callState.status === "calling" ? "Cancel" : "End"}</span>
         </button>
       </div>

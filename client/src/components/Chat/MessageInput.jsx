@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { truncate } from "../../utils/helpers.js";
+import { truncate, formatBytes } from "../../utils/helpers.js";
+import { PaperclipIcon, SendIcon, XIcon, FileTextIcon, ImageIcon } from "../UI/Icons.jsx";
+
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply }) {
   const [text, setText] = useState("");
+  const [fileAttachment, setFileAttachment] = useState(null);
+  const [fileError, setFileError] = useState("");
   const taRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Auto-resize textarea as user types
   useEffect(() => {
@@ -25,10 +31,48 @@ export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply 
     }
   }
 
+  function handleFileSelect(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setFileError("File too large. Maximum size is 20 MB.");
+      setTimeout(() => setFileError(""), 4000);
+      e.target.value = "";
+      return;
+    }
+
+    setFileError("");
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFileAttachment({
+        name: file.name,
+        size: file.size,
+        type: file.type || "application/octet-stream",
+        data: reader.result,
+        isImage: file.type.startsWith("image/"),
+      });
+    };
+    reader.onerror = () => {
+      setFileError("Failed to read file.");
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  function removeAttachment() {
+    setFileAttachment(null);
+    setFileError("");
+  }
+
   function submit() {
-    if (!text.trim()) return;
-    onSend(text, replyTo);
+    const trimmed = text.trim();
+    if (!trimmed && !fileAttachment) return;
+
+    onSend(trimmed, replyTo, fileAttachment);
     setText("");
+    setFileAttachment(null);
+    setFileError("");
     onTyping(false);
     if (replyTo) onCancelReply();
     if (taRef.current) {
@@ -37,8 +81,11 @@ export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply 
     }
   }
 
+  const canSend = text.trim().length > 0 || !!fileAttachment;
+
   return (
     <div className="message-form-wrap">
+      {/* Reply bar */}
       {replyTo && (
         <div className="reply-bar">
           <div className="reply-info">
@@ -54,10 +101,41 @@ export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply 
             onClick={onCancelReply}
             title="Cancel reply"
           >
-            ✕
+            <XIcon size={14} />
           </button>
         </div>
       )}
+
+      {/* File Preview Bar */}
+      {fileAttachment && (
+        <div className="file-preview-bar">
+          <div className="file-preview-chip">
+            {fileAttachment.isImage ? (
+              <img src={fileAttachment.data} alt="Preview" className="preview-thumb" />
+            ) : (
+              <div className="preview-file-icon">
+                <FileTextIcon size={20} />
+              </div>
+            )}
+            <div className="preview-meta">
+              <span className="preview-filename">{truncate(fileAttachment.name, 35)}</span>
+              <span className="preview-filesize">{formatBytes(fileAttachment.size)}</span>
+            </div>
+            <button
+              type="button"
+              className="preview-remove-btn"
+              onClick={removeAttachment}
+              title="Remove attachment"
+              aria-label="Remove attachment"
+            >
+              <XIcon size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {fileError && <div className="file-error-badge">{fileError}</div>}
+
       <form
         className="message-form"
         onSubmit={(e) => {
@@ -65,6 +143,25 @@ export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply 
           submit();
         }}
       >
+        {/* Hidden File Input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          style={{ display: "none" }}
+          onChange={handleFileSelect}
+        />
+
+        {/* Attachment button */}
+        <button
+          type="button"
+          className={"attach-btn " + (fileAttachment ? "has-file" : "")}
+          title="Send image or file"
+          aria-label="Send image or file"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <PaperclipIcon size={19} />
+        </button>
+
         <textarea
           ref={taRef}
           rows={1}
@@ -72,30 +169,23 @@ export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply 
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           onBlur={() => onTyping(false)}
-          placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+          placeholder={
+            fileAttachment
+              ? "Add a caption… (optional)"
+              : "Type a message… (Enter to send, Shift+Enter for newline)"
+          }
           maxLength={4000}
           aria-label="Message"
         />
+
         <button
           type="submit"
-          className={"send-btn " + (text.trim() ? "has-text" : "")}
-          disabled={!text.trim()}
+          className={"send-btn " + (canSend ? "has-text" : "")}
+          disabled={!canSend}
           aria-label="Send message"
           title="Send message"
         >
-          <svg
-            viewBox="0 0 24 24"
-            width="18"
-            height="18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
+          <SendIcon size={18} />
         </button>
       </form>
     </div>

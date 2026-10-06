@@ -18,14 +18,15 @@ export function useChatMessages(socket, roomId, myParticipantId, myDisplayName) 
   );
 
   const sendMessage = useCallback(
-    (text, replyTo) => {
-      const trimmed = text.trim();
-      if (!trimmed) return;
+    (text, replyTo, file = null) => {
+      const trimmed = (text || "").trim();
+      if (!trimmed && !file) return;
       const msg = {
         id: generateId(),
         authorId: myParticipantId,
         authorName: myDisplayName,
         text: trimmed,
+        file: file || null,
         ts: Date.now(),
         replyTo: replyTo ? { id: replyTo.id, authorName: replyTo.authorName, text: replyTo.text } : null,
       };

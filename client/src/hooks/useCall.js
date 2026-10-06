@@ -75,7 +75,9 @@ export function useCall(socket) {
     pendingCandidatesRef.current = [];
     for (const cand of queued) {
       try {
-        await pc.addIceCandidate(new RTCIceCandidate(cand));
+        if (cand) {
+          await pc.addIceCandidate(cand);
+        }
       } catch (err) {
         console.warn("[WebRTC] Error applying buffered ICE candidate:", err);
       }
@@ -107,6 +109,7 @@ export function useCall(socket) {
               }
               return new MediaStream(prev.getTracks());
             });
+            handleConnected();
           },
           onStateChange: (state) => {
             if (state === "connected") {
@@ -121,9 +124,11 @@ export function useCall(socket) {
             if (iceState === "connected" || iceState === "completed") {
               handleConnected();
             } else if (iceState === "failed") {
-              setError("Direct network connection could not be established.");
-              playCallEnded();
-              cleanup();
+              if (!hasConnectedRef.current) {
+                setError("Direct network connection could not be established.");
+                playCallEnded();
+                cleanup();
+              }
             }
           },
         },
@@ -327,7 +332,7 @@ export function useCall(socket) {
       const pc = pcRef.current;
       if (pc && pc.remoteDescription && pc.remoteDescription.type) {
         try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          await pc.addIceCandidate(candidate);
         } catch (err) {
           console.warn("[WebRTC] Error adding ICE candidate:", err);
         }

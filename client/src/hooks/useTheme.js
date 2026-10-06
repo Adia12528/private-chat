@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 export function useTheme() {
-  const [theme, setTheme] = useState(() => localStorage.getItem("pc-theme") || "system");
+  const [theme, setTheme] = useState(() => localStorage.getItem("pc-theme") || "dark");
 
   useEffect(() => {
     const root = document.documentElement;

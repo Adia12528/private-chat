@@ -45,7 +45,14 @@ export async function fetchIceServers() {
 
   // 2. Otherwise try to fetch dynamically from server endpoint
   try {
-    const baseUrl = import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+    const envUrl = import.meta.env.VITE_SOCKET_URL;
+    let baseUrl = envUrl || "http://localhost:3001";
+    if (typeof window !== "undefined" && window.location.hostname) {
+      const host = window.location.hostname;
+      if (host !== "localhost" && host !== "127.0.0.1" && (!envUrl || envUrl.includes("localhost") || envUrl.includes("127.0.0.1"))) {
+        baseUrl = `${window.location.protocol}//${host}:3001`;
+      }
+    }
     const res = await fetch(`${baseUrl}/api/ice-servers`);
     if (res.ok) {
       const data = await res.json();

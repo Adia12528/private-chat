@@ -190,12 +190,27 @@ export function registerSocketHandlers(io, socket) {
     "chat:message",
     safe((msg = {}) => {
       if (!myRoomId || rateLimited()) return;
-      if (typeof msg.text !== "string") return;
-      const text = msg.text.trim();
-      if (!text || text.length > MAX_MESSAGE_LENGTH) return;
+      const text = typeof msg.text === "string" ? msg.text.trim().slice(0, MAX_MESSAGE_LENGTH) : "";
+      const hasFile = msg.file && typeof msg.file === "object" && typeof msg.file.data === "string";
+      if (!text && !hasFile) return;
+
+      let safeFile = null;
+      if (hasFile && typeof msg.file.data === "string") {
+        // Enforce safe 25MB base64 ceiling
+        if (msg.file.data.length <= 35 * 1024 * 1024) {
+          safeFile = {
+            name: String(msg.file.name || "file").slice(0, 150),
+            type: String(msg.file.type || "application/octet-stream").slice(0, 80),
+            size: Number(msg.file.size) || 0,
+            data: msg.file.data,
+          };
+        }
+      }
+
       socket.to(myRoomId).emit("chat:message", {
         id: String(msg.id || ""),
         text,
+        file: safeFile,
         ts: Date.now(),
         replyTo: msg.replyTo || null,
         authorId: myParticipantId,
