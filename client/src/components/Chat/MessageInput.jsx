@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { truncate, formatBytes } from "../../utils/helpers.js";
+import { truncate, formatBytes, compressImageFile } from "../../utils/helpers.js";
 import { PaperclipIcon, SendIcon, XIcon, FileTextIcon, ImageIcon } from "../UI/Icons.jsx";
 
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
 
 export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply }) {
   const [text, setText] = useState("");
   const [fileAttachment, setFileAttachment] = useState(null);
   const [fileError, setFileError] = useState("");
+  const [processingFile, setProcessingFile] = useState(false);
   const taRef = useRef(null);
   const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
 
   // Auto-resize textarea as user types
   useEffect(() => {
@@ -31,33 +33,63 @@ export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply 
     }
   }
 
-  function handleFileSelect(e) {
+  async function handleFileSelect(e) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      setFileError("File too large. Maximum size is 20 MB.");
+      setFileError("File too large. Maximum size is 25 MB.");
       setTimeout(() => setFileError(""), 4000);
       e.target.value = "";
       return;
     }
 
     setFileError("");
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFileAttachment({
-        name: file.name,
-        size: file.size,
-        type: file.type || "application/octet-stream",
-        data: reader.result,
-        isImage: file.type.startsWith("image/"),
-      });
-    };
-    reader.onerror = () => {
-      setFileError("Failed to read file.");
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
+    setProcessingFile(true);
+
+    try {
+      const isImg = file.type.startsWith("image/");
+      if (isImg) {
+        // Compress & optimize image for blazing fast mobile transfer without losing sharpness
+        const compressed = await compressImageFile(file, 1920, 0.85);
+        if (compressed.data) {
+          setFileAttachment({
+            name: file.name,
+            size: compressed.size,
+            type: compressed.type || file.type || "image/jpeg",
+            data: compressed.data,
+            isImage: true,
+          });
+        } else {
+          setFileError("Failed to process image.");
+        }
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setFileAttachment({
+            name: file.name,
+            size: file.size,
+            type: file.type || "application/octet-stream",
+            data: reader.result,
+            isImage: false,
+          });
+          setProcessingFile(false);
+        };
+        reader.onerror = () => {
+          setFileError("Failed to read file.");
+          setProcessingFile(false);
+        };
+        reader.readAsDataURL(file);
+        e.target.value = "";
+        return;
+      }
+    } catch (err) {
+      console.error("File selection error:", err);
+      setFileError("Error attaching file.");
+    } finally {
+      setProcessingFile(false);
+      e.target.value = "";
+    }
   }
 
   function removeAttachment() {
@@ -135,6 +167,11 @@ export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply 
       )}
 
       {fileError && <div className="file-error-badge">{fileError}</div>}
+      {processingFile && (
+        <div className="file-processing-badge">
+          <span className="mini-spinner" /> Processing photo…
+        </div>
+      )}
 
       <form
         className="message-form"
@@ -143,7 +180,14 @@ export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply 
           submit();
         }}
       >
-        {/* Hidden File Input */}
+        {/* Hidden File Inputs */}
+        <input
+          type="file"
+          ref={imageInputRef}
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleFileSelect}
+        />
         <input
           type="file"
           ref={fileInputRef}
@@ -151,16 +195,29 @@ export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply 
           onChange={handleFileSelect}
         />
 
-        {/* Attachment button */}
-        <button
-          type="button"
-          className={"attach-btn " + (fileAttachment ? "has-file" : "")}
-          title="Send image or file"
-          aria-label="Send image or file"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <PaperclipIcon size={19} />
-        </button>
+        <div className="input-attach-actions">
+          {/* Photo / Image button (Direct gallery/camera on mobile) */}
+          <button
+            type="button"
+            className={"attach-btn photo-btn " + (fileAttachment?.isImage ? "has-file" : "")}
+            title="Send photo / image"
+            aria-label="Send photo or image"
+            onClick={() => imageInputRef.current?.click()}
+          >
+            <ImageIcon size={20} />
+          </button>
+
+          {/* Document / File button */}
+          <button
+            type="button"
+            className={"attach-btn doc-btn " + (fileAttachment && !fileAttachment?.isImage ? "has-file" : "")}
+            title="Send file or document"
+            aria-label="Send file or document"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <PaperclipIcon size={19} />
+          </button>
+        </div>
 
         <textarea
           ref={taRef}

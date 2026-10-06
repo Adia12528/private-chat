@@ -23,47 +23,39 @@ function key(roomId) {
 
 export function loadMessages(roomId) {
   if (!roomId) return [];
+  if (memoryStore.has(roomId) && memoryStore.get(roomId).length > 0) {
+    return memoryStore.get(roomId);
+  }
   try {
     if (AVAILABLE) {
       const raw = localStorage.getItem(key(roomId));
-      return raw ? JSON.parse(raw) : [];
+      const parsed = raw ? JSON.parse(raw) : [];
+      memoryStore.set(roomId, parsed);
+      return parsed;
     }
-    return memoryStore.get(roomId) || [];
   } catch (err) {
     console.error("Failed to load local chat history, starting fresh.", err);
-    return [];
   }
+  return memoryStore.get(roomId) || [];
 }
 
 export function saveMessages(roomId, messages) {
   if (!roomId) return;
+  // Always keep complete messages with intact files in memoryStore for active session
+  memoryStore.set(roomId, messages);
+
+  if (!AVAILABLE) return;
+
   try {
-    if (AVAILABLE) {
-      try {
-        localStorage.setItem(key(roomId), JSON.stringify(messages));
-      } catch (err) {
-        // If quota exceeded due to large base64 files, strip heavy file data but keep preview/metadata
-        const lean = messages.map((m) => {
-          if (m.file && m.file.data && m.file.data.length > 200000) {
-            return {
-              ...m,
-              file: {
-                name: m.file.name,
-                size: m.file.size,
-                type: m.file.type,
-                data: m.file.type.startsWith("image/") ? m.file.data.slice(0, 50000) : null,
-              },
-            };
-          }
-          return m;
-        });
-        localStorage.setItem(key(roomId), JSON.stringify(lean));
-      }
-    } else {
-      memoryStore.set(roomId, messages);
-    }
+    localStorage.setItem(key(roomId), JSON.stringify(messages));
   } catch (err) {
-    console.error("Could not save chat history locally.", err);
+    try {
+      // If quota exceeded, save the most recent 25 messages intact instead of corrupting base64
+      const recent = messages.slice(-25);
+      localStorage.setItem(key(roomId), JSON.stringify(recent));
+    } catch {
+      // Preserved in memoryStore
+    }
   }
 }
 

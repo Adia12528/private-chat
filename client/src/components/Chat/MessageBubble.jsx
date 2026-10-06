@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatTime, truncate, formatBytes } from "../../utils/helpers.js";
+import { formatTime, truncate, formatBytes, downloadFile } from "../../utils/helpers.js";
 import {
   ReplyIcon,
   EditIcon,
@@ -16,6 +16,7 @@ export default function MessageBubble({ message, isMine, onReply, onEdit, onDele
   const [draft, setDraft] = useState(message.text || "");
   const [copied, setCopied] = useState(false);
   const [lightbox, setLightbox] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -33,6 +34,16 @@ export default function MessageBubble({ message, isMine, onReply, onEdit, onDele
       document.removeEventListener("touchstart", handleClickOutside);
     };
   }, [menuOpen]);
+
+  // Close lightbox on Escape key
+  useEffect(() => {
+    if (!lightbox) return;
+    function handleKeyDown(e) {
+      if (e.key === "Escape") setLightbox(false);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lightbox]);
 
   function copyText() {
     const content = message.text || message.file?.name || "";
@@ -109,45 +120,72 @@ export default function MessageBubble({ message, isMine, onReply, onEdit, onDele
                 {/* File Attachment Rendering */}
                 {hasFile && !message.deleted && (
                   <div className="bubble-attachment">
-                    {isImage ? (
-                      <div className="bubble-image-wrap">
+                    {isImage && !imgError ? (
+                      <div
+                        className="bubble-image-wrap"
+                        onClick={() => setLightbox(true)}
+                        title="Click to view full screen"
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setLightbox(true);
+                          }
+                        }}
+                      >
                         <img
                           src={message.file.data}
                           alt={message.file.name}
                           className="bubble-image"
                           loading="lazy"
-                          onClick={() => setLightbox(true)}
+                          onError={() => setImgError(true)}
                         />
-                        <div className="image-overlay-actions">
-                          <a
-                            href={message.file.data}
-                            download={message.file.name}
-                            className="attachment-download-btn image-dl"
+                        <div className="image-overlay-bar">
+                          <span className="image-expand-hint">
+                            🔍 Full screen
+                          </span>
+                          <button
+                            type="button"
+                            className="attachment-download-btn image-dl-btn"
                             title={`Download ${message.file.name}`}
+                            aria-label={`Download ${message.file.name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadFile(message.file.data, message.file.name);
+                            }}
                           >
                             <DownloadIcon size={14} /> Download
-                          </a>
+                          </button>
                         </div>
                       </div>
                     ) : (
                       <div className="bubble-file-card">
                         <div className="file-icon-box">
-                          <FileTextIcon size={24} />
+                          {isImage ? (
+                            <span style={{ fontSize: "20px" }}>🖼️</span>
+                          ) : (
+                            <FileTextIcon size={24} />
+                          )}
                         </div>
                         <div className="file-info-box">
-                          <span className="file-title" title={message.file.name}>
-                            {truncate(message.file.name, 35)}
+                          <span className="file-title" title={message.file?.name}>
+                            {truncate(message.file?.name || "file", 32)}
                           </span>
-                          <span className="file-size">{formatBytes(message.file.size)}</span>
+                          <span className="file-size">{formatBytes(message.file?.size)}</span>
                         </div>
-                        <a
-                          href={message.file.data}
-                          download={message.file.name}
-                          className="attachment-download-btn"
-                          title={`Download ${message.file.name}`}
+                        <button
+                          type="button"
+                          className="attachment-download-btn file-dl-btn"
+                          title={`Download ${message.file?.name}`}
+                          aria-label={`Download ${message.file?.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadFile(message.file?.data, message.file?.name);
+                          }}
                         >
-                          <DownloadIcon size={16} />
-                        </a>
+                          <DownloadIcon size={15} /> Download
+                        </button>
                       </div>
                     )}
                   </div>
@@ -252,27 +290,37 @@ export default function MessageBubble({ message, isMine, onReply, onEdit, onDele
         <div className="image-lightbox-backdrop" onClick={() => setLightbox(false)}>
           <div className="image-lightbox-content" onClick={(e) => e.stopPropagation()}>
             <div className="lightbox-header">
-              <span className="lightbox-title">{message.file.name}</span>
+              <span className="lightbox-title" title={message.file?.name}>
+                {message.file?.name} ({formatBytes(message.file?.size)})
+              </span>
               <div className="lightbox-actions">
-                <a
-                  href={message.file.data}
-                  download={message.file.name}
-                  className="lightbox-btn"
+                <button
+                  type="button"
+                  className="lightbox-btn download-btn"
+                  onClick={() => downloadFile(message.file.data, message.file.name)}
                   title="Download image"
                 >
                   <DownloadIcon size={16} /> Download
-                </a>
+                </button>
                 <button
                   type="button"
                   className="lightbox-btn close"
                   onClick={() => setLightbox(false)}
-                  title="Close viewer"
+                  title="Close viewer (Esc)"
+                  aria-label="Close viewer"
                 >
                   <XIcon size={18} />
                 </button>
               </div>
             </div>
-            <img src={message.file.data} alt={message.file.name} className="lightbox-img" />
+            <div className="lightbox-img-wrap" onClick={() => setLightbox(false)}>
+              <img
+                src={message.file.data}
+                alt={message.file.name}
+                className="lightbox-img"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
           </div>
         </div>
       )}
